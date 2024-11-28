@@ -8,6 +8,7 @@ const app = express();
 app.use(express.json());
 app.use(cors())
 const db = new sqlite.Database("church.db");
+const name ="James"
 
 app.get("/test", function (request, response) {
   const sql = `
