@@ -9,6 +9,7 @@ app.use(express.json());
 app.use(cors())
 const db = new sqlite.Database("church.db");
 const name ="James"
+const anotherName = "Eric"
 
 app.get("/test", function (request, response) {
   const sql = `
