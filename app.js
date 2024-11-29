@@ -1,41 +1,27 @@
 // Importing dependencies
 const express = require("express");
-const sqlite = require("sqlite3");
 const bcrypt = require("bcrypt");
 const cors = require("cors");
+const { db, initializeDatabase, checkAdmin } = require("./db");
 
 const app = express();
 app.use(express.json());
-app.use(cors())
-const db = new sqlite.Database("church.db");
-const name ="James"
-const anotherName = "Eric"
+app.use(cors());
 
-app.get("/test", function (request, response) {
-  const sql = `
-        CREATE TABLE IF NOT EXISTS members (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT,
-            email TEXT,
-            password TEXT,
-            nationalId TEXT,
-            sex TEXT,
-            districtNumber TEXT,
-            isAdmin BOOLEAN DEFAULT FALSE
-        )
-    `;
-  db.run(sql, (err) => {
-    if (err) {
-      response.status(500).json({ error: err.message });
-    } else {
-      response.json({ message: "Table created successfully" });
-    }
-  });
-});
+// Initialize database
+initializeDatabase();
+
 // POST request when users register for an account
-app.post("/register", async function (request, response) {
-  const { username, email, password, nationalId, sex, districtNumber } =
-    request.body;
+app.post("/users/register", async function (request, response) {
+  const {
+    username,
+    email,
+    password,
+    nationalId,
+    sex,
+    districtNumber,
+    cardNumber,
+  } = request.body;
   // Checking if user has submitted data
   if (
     !username ||
@@ -43,7 +29,8 @@ app.post("/register", async function (request, response) {
     !password ||
     !nationalId ||
     !sex ||
-    !districtNumber
+    !districtNumber ||
+    !cardNumber
   ) {
     return response.status(400).json({ message: "Bad request" });
   }
@@ -63,12 +50,20 @@ app.post("/register", async function (request, response) {
       });
     }
 
-    const insertSql = `INSERT INTO members (username, email, password, nationalId, sex, districtNumber) VALUES (?, ?, ?, ?, ?, ?)`;
+    const insertSql = `INSERT INTO members (username, email, password, nationalId, sex, districtNumber, cardNumber) VALUES (?, ?, ?, ?, ?, ?, ?)`;
     const hashedPass = await bcrypt.hash(password, 10);
 
     db.run(
       insertSql,
-      [username, email, hashedPass, nationalId, sex, districtNumber],
+      [
+        username,
+        email,
+        hashedPass,
+        nationalId,
+        sex,
+        districtNumber,
+        cardNumber,
+      ],
       function (err) {
         if (err) {
           return response.status(500).json({ error: err.message });
@@ -82,7 +77,8 @@ app.post("/register", async function (request, response) {
   });
 });
 
-app.post("/login", function (request, response) {
+//POST request when user logs into their account
+app.post("/users/login", function (request, response) {
   //Get user data from request
   const { email, districtNumber, password } = request.body;
 
@@ -91,32 +87,61 @@ app.post("/login", function (request, response) {
     return response.status(400).json({ message: "Bad Request" });
   }
 
-  // TODO: Check the userdata against userInfo in database\
-  const checkSql = `SELECT * FROM members WHERE email = ? OR districtNumber = ? OR password = ?`
+  const checkSql = `SELECT * FROM members WHERE email = ? OR districtNumber = ? OR password = ?`;
 
-  db.get(checkSql, [email, password], async function(err, row){
-
-    if(err){
-      return response.status(500).json({ message: "Database error during data check"})
+  db.get(checkSql, [email, password], async function (err, row) {
+    if (err) {
+      return response
+        .status(500)
+        .json({ message: "Database error during data check" });
     }
 
     //Check if password maches the onw in the database
-    const hashedPass = await bcrypt.compare(password, row.password)
+    const hashedPass = await bcrypt.compare(password, row.password);
 
-    if(hashedPass){
-      return response.status(200).json(row)
-
-    }else{
-      return response.status(400).json({message: "Login unsuccessful"})
+    if (hashedPass) {
+      const { password, nationalId, ...other } = row;
+      return response.status(200).json(other);
+    } else {
+      return response.status(400).json({ message: "Login unsuccessful" });
     }
-
-  })
+  });
 });
 
+//GET request to fetch all events
 app.get("/events", function (request, response) {
-  // TODO: Fetch event data from database
+  const getSql = `SELECT * FROM events`;
 
-  response.status(200).json({ message: "Request Successfull" });
+  db.all(getSql, [], (err, rows) => {
+    if (err) {
+      return response.status(500).json({ message: "Unable to fetch data" });
+    } else {
+      response.status(200).json({ events: rows });
+    }
+  });
+});
+
+//POST request to create events --- (admin on
+app.post("/events/add", checkAdmin, function (request, response) {
+  const { eventName, eventDate, eventTime } = request.body;
+
+  if (!eventName || !eventDate || !eventTime) {
+    return response.status(400).json({ message: "Please provide all fields" });
+  }
+
+  const insertEventSql = `
+  INSERT INTO events (event_name, event_date, event_time)
+  VALUES (?, ?, ?)
+`;
+
+  db.run(insertEventSql, [eventName, eventDate, eventTime], (err)=>{
+
+    if(err){
+      return response.status(500).json({ message: "Error adding event"})
+    }
+
+    response.status(201).json({ message: "Event added successfully"})
+  })
 });
 
 app.get("/users", function (request, response) {
