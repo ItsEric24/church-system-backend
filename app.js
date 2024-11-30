@@ -89,7 +89,7 @@ app.post("/users/login", function (request, response) {
 
   const checkSql = `SELECT * FROM members WHERE email = ? OR districtNumber = ? OR password = ?`;
 
-  db.get(checkSql, [email, password], async function (err, row) {
+  db.get(checkSql, [email, password, districtNumber], async function (err, row) {
     if (err) {
       return response
         .status(500)
@@ -144,9 +144,16 @@ app.post("/events/add", checkAdmin, function (request, response) {
   })
 });
 
-app.get("/users", function (request, response) {
-  // TODO: Check if request if from admin
-  // TODO: Fetch all users from database
+app.get("/users", checkAdmin, function (request, response) {
+   const getUsersSql = `SELECT username, email, districtNumber, cardNumber FROM members`
+
+   db.all(getUsersSql, [], (err, row)=>{
+    if(err){
+      return response.status(500).json({ message: "Error fetching users"})
+    }
+
+    response.status(200).json({ users: row})
+   })
 });
 
 app.listen(3000, function () {

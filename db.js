@@ -47,7 +47,7 @@ const initializeDatabase = () => {
 };
 
 function checkAdmin(request, response, next) {
-  const { email } = request.body;
+  const email = request.body.email || request.headers.authorization;
 
   if (!email) {
     return response.status(400).json({ message: "Bad Request" });
